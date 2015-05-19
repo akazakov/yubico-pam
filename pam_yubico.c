@@ -216,6 +216,7 @@ free_out:
 static int
 authorize_user_token_ldap (struct cfg *cfg,
 			   const char *user,
+			   const char *passwd,
 			   const char *token_id)
 {
   int retval = 0;
@@ -277,16 +278,18 @@ authorize_user_token_ldap (struct cfg *cfg,
   }
   /* Bind anonymously to the LDAP server. */
   if (cfg->bind_auth) {
-    if (!onlypasswd) 
-    DBG (("Cant bind_auth with empty pass"));
-    retval = 0;
-    goto done;
+    if (!passwd)  {
+      DBG (("Cant bind_auth with empty pass"));
+      retval = 0;
+      goto done;
+    }
 
+    DBG (("Usign LDAP to auth with user credentials"));
     char bind_user[512];
     // Substitue %s in the bind user with the current user trying to auth
     snprintf (bind_user, sizeof(bind_user), cfg->ldap_bind_user, user);
-    rc = ldap_simple_bind_s (ld, bind_user, onlypasswd);
-  } else if if (cfg->ldap_bind_user && cfg->ldap_bind_password) {
+    rc = ldap_simple_bind_s (ld, bind_user, passwd);
+  } else if (cfg->ldap_bind_user && cfg->ldap_bind_password) {
     DBG (("try bind with: %s:[%s]", cfg->ldap_bind_user, cfg->ldap_bind_password));
     rc = ldap_simple_bind_s (ld, cfg->ldap_bind_user, cfg->ldap_bind_password);
   } else {
@@ -733,7 +736,7 @@ parse_cfg (int flags, int argc, const char **argv, struct cfg *cfg)
 	cfg->mode = CLIENT;
       if (strncmp (argv[i], "chalresp_path=", 14) == 0)
 	cfg->chalresp_path = argv[i] + 14;
-      if (strcmp (argv[i], "bind_autht") == 0)
+      if (strcmp (argv[i], "bind_auth") == 0)
 	cfg->bind_auth = 1;
     }
 
@@ -767,6 +770,7 @@ parse_cfg (int flags, int argc, const char **argv, struct cfg *cfg)
       D (("token_id_length=%d", cfg->token_id_length));
       D (("mode=%s", cfg->mode == CLIENT ? "client" : "chresp" ));
       D (("chalresp_path=%s", cfg->chalresp_path ? cfg->chalresp_path : "(null)"));
+      D (("bind_auth=%d", cfg->bind_auth));
     }
 }
 
@@ -1034,7 +1038,7 @@ pam_sm_authenticate (pam_handle_t * pamh,
 
   /* authorize the user with supplied token id */
   if (cfg->ldapserver != NULL || cfg->ldap_uri != NULL)
-    valid_token = authorize_user_token_ldap (cfg, user, otp_id);
+    valid_token = authorize_user_token_ldap (cfg, user, onlypasswd, otp_id);
   else
     valid_token = authorize_user_token (cfg, user, otp_id, pamh);
 
