@@ -107,6 +107,7 @@ struct cfg
   int verbose_otp;
   int try_first_pass;
   int use_first_pass;
+  int bind_auth;
   const char *auth_file;
   const char *capath;
   const char *url;
@@ -275,7 +276,17 @@ authorize_user_token_ldap (struct cfg *cfg,
     ldap_set_option (0, LDAP_OPT_X_TLS_CACERTFILE, cfg->ldap_cacertfile);
   }
   /* Bind anonymously to the LDAP server. */
-  if (cfg->ldap_bind_user && cfg->ldap_bind_password) {
+  if (cfg->bind_auth) {
+    if (!onlypasswd) 
+    DBG (("Cant bind_auth with empty pass"));
+    retval = 0;
+    goto done;
+
+    char bind_user[512];
+    // Substitue %s in the bind user with the current user trying to auth
+    snprintf (bind_user, sizeof(bind_user), cfg->ldap_bind_user, user);
+    rc = ldap_simple_bind_s (ld, bind_user, onlypasswd);
+  } else if if (cfg->ldap_bind_user && cfg->ldap_bind_password) {
     DBG (("try bind with: %s:[%s]", cfg->ldap_bind_user, cfg->ldap_bind_password));
     rc = ldap_simple_bind_s (ld, cfg->ldap_bind_user, cfg->ldap_bind_password);
   } else {
@@ -722,6 +733,8 @@ parse_cfg (int flags, int argc, const char **argv, struct cfg *cfg)
 	cfg->mode = CLIENT;
       if (strncmp (argv[i], "chalresp_path=", 14) == 0)
 	cfg->chalresp_path = argv[i] + 14;
+      if (strcmp (argv[i], "bind_autht") == 0)
+	cfg->bind_auth = 1;
     }
 
   if (cfg->debug)
